@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>5.1 Audio Router</title>
+    <script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="header">
+        <h1>🎵 5.1 Audio Router</h1>
+        <div id="controls">
+            <select id="inputDevice">
+                <option value="">Select Input Device...</option>
+            </select>
+            <button id="startBtn" onclick="startRouter()">Start</button>
+            <button id="stopBtn" onclick="stopRouter()" disabled>Stop</button>
+            <span id="status" class="status stopped">STOPPED</span>
+        </div>
+    </div>
+    <div id="main-container">
+        <div id="canvas-container">
+            <canvas id="mycanvas"></canvas>
+        </div>
+        <div id="sidebar">
+            <h3>🎛️ Tools</h3>
+            <button id="addMixerBtn" onclick="addMixerNode()" class="tool-btn">+ Add Mixer</button>
+            
+            <h3>📤 Output Devices</h3>
+            <div id="device-list"></div>
+        </div>
+    </div>
+    
+    <script src="/main.js"></script>
+</body>
+</html>

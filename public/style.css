@@ -1,0 +1,167 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: #1a1a1a;
+    color: #fff;
+}
+
+#header {
+    background: #2a2a2a;
+    padding: 15px;
+    border-bottom: 2px solid #3a3a3a;
+}
+
+#header h1 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+}
+
+#controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+select, button {
+    padding: 8px 15px;
+    background: #3a3a3a;
+    color: #fff;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+button:hover {
+    background: #4a4a4a;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#main-container {
+    display: flex;
+    height: calc(100vh - 100px);
+}
+
+#canvas-container {
+    flex: 1;
+    position: relative;
+}
+
+#mycanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.litegraph {
+    background-color: #1a1a1a !important;
+}
+
+#sidebar {
+    width: 300px;
+    background: #2a2a2a;
+    border-left: 2px solid #3a3a3a;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+#sidebar h3 {
+    margin: 20px 0 15px 0;
+    font-size: 16px;
+    color: #fff;
+}
+
+#sidebar h3:first-child {
+    margin-top: 0;
+}
+
+.tool-btn {
+    width: 100%;
+    padding: 12px;
+    background: #2d5;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 10px;
+}
+
+.tool-btn:hover {
+    background: #3e6;
+    transform: translateY(-1px);
+}
+
+.device-block {
+    background: #3a3a3a;
+    border: 1px solid #4a4a4a;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.device-block:hover {
+    background: #4a4a4a;
+    border-color: #5a5a5a;
+    transform: translateX(-2px);
+}
+
+.device-block.added {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #2a2a2a;
+}
+
+.device-block.added:hover {
+    transform: none;
+}
+
+.device-name {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #fff;
+}
+
+.device-info {
+    font-size: 11px;
+    color: #999;
+}
+
+.device-badge {
+    display: inline-block;
+    background: #2d5;
+    color: #000;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.status.running {
+    background: #2d5;
+    color: #000;
+}
+
+.status.stopped {
+    background: #d52;
+    color: #fff;
+}
