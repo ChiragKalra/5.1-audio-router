@@ -49,7 +49,7 @@ pip install pyaudio fastapi uvicorn numpy
 
 1. Start the server:
 ```bash
-python router_web.py
+python main.py
 ```
 
 2. Open your browser to `http://localhost:8000`
@@ -80,7 +80,7 @@ python router_web.py
 
 ## Architecture
 
-- `router_web.py`: FastAPI web server and REST API endpoints
+- `main.py`: FastAPI web server and REST API endpoints
 - `audio_router.py`: Core audio processing with PyAudio
 - `public/`: Frontend files (HTML, CSS, JavaScript)
   - `index.html`: Main page structure
