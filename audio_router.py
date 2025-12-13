@@ -10,6 +10,7 @@ import threading
 from collections import deque
 from typing import Dict, List
 
+
 # Audio config
 SAMPLE_RATE = 48000
 CHUNK_SIZE = 512
@@ -28,6 +29,7 @@ class AudioRouter:
         self.output_levels = {}
         self.streams = {}
         self.websocket_clients = []
+        self.actual_channels = 6  # Default to 6, will be updated when starting
         
     def get_devices(self):
         """Get all available audio devices"""
@@ -56,15 +58,37 @@ class AudioRouter:
         self.input_device = input_device_id
         self.running = True
         
-        # Open input stream
-        self.input_stream = self.p.open(
-            format=pyaudio.paFloat32,
-            channels=6,
-            rate=SAMPLE_RATE,
-            input=True,
-            input_device_index=input_device_id,
-            frames_per_buffer=CHUNK_SIZE
-        )
+        # Get device info for debugging
+        device_info = self.p.get_device_info_by_index(input_device_id)
+        print(f"Starting with device: {device_info['name']}")
+        print(f"Max input channels: {device_info['maxInputChannels']}")
+        print(f"Default sample rate: {device_info['defaultSampleRate']}")
+        
+        # Try to determine actual supported channels
+        max_channels = device_info['maxInputChannels']
+        channels_to_use = min(6, max_channels)
+        
+        print(f"Attempting to open stream with {channels_to_use} channels")
+        
+        # Try opening stream with different channel counts if needed
+        for channels in [channels_to_use, 2, 1]:
+            try:
+                print(f"Trying {channels} channels...")
+                self.input_stream = self.p.open(
+                    format=pyaudio.paFloat32,
+                    channels=channels,
+                    rate=SAMPLE_RATE,
+                    input=True,
+                    input_device_index=input_device_id,
+                    frames_per_buffer=CHUNK_SIZE
+                )
+                self.actual_channels = channels
+                print(f"Successfully opened stream with {channels} channels")
+                break
+            except Exception as e:
+                print(f"Failed to open with {channels} channels: {e}")
+                if channels == 1:
+                    raise Exception(f"Could not open audio device {input_device_id} with any channel configuration")
         
         # Start processing thread
         self.thread = threading.Thread(target=self._process_audio, daemon=True)
@@ -80,6 +104,9 @@ class AudioRouter:
             stream.stop_stream()
             stream.close()
         self.streams.clear()
+        # Clear all latency buffers to stop residual audio
+        for buffer in self.latency_buffers.values():
+            buffer.clear()
     
     def add_output(self, device_id):
         """Add an output device"""
@@ -133,6 +160,11 @@ class AudioRouter:
         if device_id in self.latency_offsets:
             self.latency_offsets[device_id] = int((ms / 1000.0) * SAMPLE_RATE)
     
+    def clear_buffers(self):
+        """Clear all latency buffers to stop residual audio"""
+        for buffer in self.latency_buffers.values():
+            buffer.clear()
+    
     def get_state(self):
         """Get current router state"""
         return {
@@ -152,7 +184,16 @@ class AudioRouter:
                 # Read input
                 data = self.input_stream.read(CHUNK_SIZE, exception_on_overflow=False)
                 audio = np.frombuffer(data, dtype=np.float32)
-                audio = audio.reshape(-1, 6)
+                audio = audio.reshape(-1, self.actual_channels)
+                
+                # Pad or truncate to 6 channels for consistent processing
+                if self.actual_channels < 6:
+                    # Pad with zeros
+                    padding = np.zeros((audio.shape[0], 6 - self.actual_channels), dtype=np.float32)
+                    audio = np.concatenate([audio, padding], axis=1)
+                elif self.actual_channels > 6:
+                    # Truncate to first 6 channels
+                    audio = audio[:, :6]
                 
                 # Update input levels
                 for i in range(6):
@@ -166,6 +207,17 @@ class AudioRouter:
                     # Mix connected channels for L and R separately
                     l_mix = self.connections[device_id]['L']
                     r_mix = self.connections[device_id]['R']
+                    
+                    # Skip if no connections
+                    if not l_mix and not r_mix:
+                        # Output silence and zero levels
+                        output = np.zeros((CHUNK_SIZE, 2), dtype=np.float32)
+                        self.output_levels[device_id] = [0.0, 0.0]
+                        try:
+                            self.streams[device_id].write(output.tobytes())
+                        except:
+                            pass
+                        continue
                     
                     # Mix L channel
                     left = np.zeros(CHUNK_SIZE, dtype=np.float32)

@@ -486,6 +486,27 @@ LGraph.prototype.connect = function(node1, slot1, node2, slot2) {
     return originalConnect.call(this, node1, slot1, node2, slot2);
 };
 
+// Save input device selection to cache
+function saveInputDeviceSelection(deviceId) {
+    try {
+        localStorage.setItem('audioRouterInputDevice', deviceId.toString());
+        console.log(`Input device ${deviceId} saved to cache`);
+    } catch (error) {
+        console.error('Failed to save input device selection:', error);
+    }
+}
+
+// Load input device selection from cache
+function loadInputDeviceSelection() {
+    try {
+        const cached = localStorage.getItem('audioRouterInputDevice');
+        return cached ? parseInt(cached) : null;
+    } catch (error) {
+        console.error('Failed to load input device selection:', error);
+        return null;
+    }
+}
+
 // Load devices
 async function loadDevices() {
     const response = await fetch('/api/devices');
@@ -499,6 +520,23 @@ async function loadDevices() {
         option.value = dev.id;
         option.textContent = dev.name;
         select.appendChild(option);
+    });
+    
+    // Restore cached input device selection
+    const cachedDeviceId = loadInputDeviceSelection();
+    if (cachedDeviceId !== null) {
+        const option = select.querySelector(`option[value="${cachedDeviceId}"]`);
+        if (option) {
+            select.value = cachedDeviceId;
+            console.log(`Restored input device selection: ${option.textContent}`);
+        }
+    }
+    
+    // Add event listener to save selection when changed
+    select.addEventListener('change', function() {
+        if (this.value) {
+            saveInputDeviceSelection(parseInt(this.value));
+        }
     });
     
     // Populate output device sidebar
@@ -546,13 +584,38 @@ async function startRouter() {
         body: JSON.stringify({ input_device_id: deviceId })
     });
 
-    // Create input node with device name
+    // Create input node with device name if it doesn't exist
     if (!inputNode) {
         const deviceName = select.options[select.selectedIndex].text;
         inputNode = LiteGraph.createNode("audio/input");
         inputNode.title = deviceName;
         inputNode.pos = [50, 100];
         graph.add(inputNode);
+    } else {
+        // Update existing input node title if device changed
+        const deviceName = select.options[select.selectedIndex].text;
+        inputNode.title = deviceName;
+    }
+
+    // Restore backend connections for all output nodes
+    for (let deviceId in outputNodes) {
+        const node = outputNodes[deviceId];
+        if (node) {
+            // Re-add output device to backend
+            await fetch('/api/output/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_id: parseInt(deviceId) })
+            });
+            
+            // Restore all connections
+            node.updateAllConnections();
+            
+            // Restore latency setting
+            if (node.properties.latency > 0) {
+                await setLatency(parseInt(deviceId), node.properties.latency);
+            }
+        }
     }
 
     // Connect WebSocket
@@ -600,11 +663,15 @@ function addOutputNodeById(id) {
         return;
     }
 
-    fetch('/api/output/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: id })
-    });
+    // Only add to backend if router is running
+    const isRunning = document.getElementById('status').textContent === 'RUNNING';
+    if (isRunning) {
+        fetch('/api/output/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: id })
+        });
+    }
 
     const node = LiteGraph.createNode("audio/output");
     node.properties.device_id = id;
@@ -684,8 +751,227 @@ function connectWebSocket() {
     };
 }
 
+// Cache persistence functions
+function saveGraphToCache() {
+    try {
+        const graphData = {
+            nodes: [],
+            links: [],
+            outputNodes: {},
+            inputNodeData: null,
+            timestamp: Date.now()
+        };
+        
+        // Save nodes
+        graph._nodes.forEach(node => {
+            const nodeData = {
+                id: node.id,
+                type: node.type,
+                pos: node.pos,
+                size: node.size,
+                properties: node.properties,
+                title: node.title
+            };
+            
+            // Save widgets state
+            if (node.widgets) {
+                nodeData.widgets = node.widgets.map(w => ({
+                    name: w.name,
+                    value: w.value
+                }));
+            }
+            
+            graphData.nodes.push(nodeData);
+        });
+        
+        // Save links
+        for (let linkId in graph.links) {
+            const link = graph.links[linkId];
+            if (link) {
+                graphData.links.push({
+                    id: link.id,
+                    origin_id: link.origin_id,
+                    origin_slot: link.origin_slot,
+                    target_id: link.target_id,
+                    target_slot: link.target_slot,
+                    type: link.type
+                });
+            }
+        }
+        
+        // Save output nodes mapping
+        graphData.outputNodes = Object.keys(outputNodes).reduce((acc, key) => {
+            acc[key] = outputNodes[key].id;
+            return acc;
+        }, {});
+        
+        // Save input node reference
+        if (inputNode) {
+            graphData.inputNodeData = {
+                id: inputNode.id,
+                title: inputNode.title
+            };
+        }
+        
+        localStorage.setItem('audioRouterGraph', JSON.stringify(graphData));
+        console.log(`Graph saved to cache (${graphData.nodes.length} nodes, ${graphData.links.length} connections)`);
+        
+        // Update cache info and show save indicator
+        updateCacheInfo();
+        showSaveIndicator();
+    } catch (error) {
+        console.error('Failed to save graph to cache:', error);
+    }
+}
+
+function loadGraphFromCache() {
+    try {
+        const cached = localStorage.getItem('audioRouterGraph');
+        if (!cached) return false;
+        
+        const graphData = JSON.parse(cached);
+        
+        // Clear current graph
+        graph.clear();
+        outputNodes = {};
+        inputNode = null;
+        
+        // Restore nodes
+        graphData.nodes.forEach(nodeData => {
+            let node;
+            
+            if (nodeData.type === "audio/input") {
+                node = LiteGraph.createNode("audio/input");
+                inputNode = node;
+            } else if (nodeData.type === "audio/mixer") {
+                node = LiteGraph.createNode("audio/mixer");
+            } else if (nodeData.type === "audio/output") {
+                node = LiteGraph.createNode("audio/output");
+            }
+            
+            if (node) {
+                node.id = nodeData.id;
+                node.pos = nodeData.pos;
+                node.size = nodeData.size;
+                node.properties = nodeData.properties || {};
+                node.title = nodeData.title;
+                
+                // Restore widgets
+                if (nodeData.widgets && node.widgets) {
+                    nodeData.widgets.forEach((widgetData, index) => {
+                        if (node.widgets[index]) {
+                            node.widgets[index].value = widgetData.value;
+                            // Update mixer inputs if needed
+                            if (node.type === "audio/mixer" && widgetData.name === "Inputs") {
+                                node.properties.num_inputs = widgetData.value;
+                                node.updateInputs();
+                            }
+                        }
+                    });
+                }
+                
+                graph.add(node);
+                
+                // Track output nodes
+                if (nodeData.type === "audio/output" && nodeData.properties.device_id >= 0) {
+                    outputNodes[nodeData.properties.device_id] = node;
+                }
+            }
+        });
+        
+        // Update last_node_id to prevent conflicts
+        if (graphData.nodes.length > 0) {
+            graph.last_node_id = Math.max(...graphData.nodes.map(n => n.id));
+        }
+        
+        // Restore links
+        graphData.links.forEach(linkData => {
+            const originNode = graph.getNodeById(linkData.origin_id);
+            const targetNode = graph.getNodeById(linkData.target_id);
+            
+            if (originNode && targetNode) {
+                // Use our custom connect method
+                graph.connect(originNode, linkData.origin_slot, targetNode, linkData.target_slot);
+            }
+        });
+        
+        // Update last_link_id
+        if (graphData.links.length > 0) {
+            graph.last_link_id = Math.max(...graphData.links.map(l => l.id));
+        }
+        
+        // Update sidebar to reflect loaded output nodes
+        renderDeviceList();
+        
+        const timestamp = graphData.timestamp ? new Date(graphData.timestamp).toLocaleString() : 'unknown';
+        console.log(`Graph loaded from cache (${graphData.nodes.length} nodes, ${graphData.links.length} connections, saved: ${timestamp})`);
+        return true;
+    } catch (error) {
+        console.error('Failed to load graph from cache:', error);
+        return false;
+    }
+}
+
+// Auto-save on graph changes
+graph.onNodeAdded = function(node) {
+    setTimeout(saveGraphToCache, 100);
+};
+
+graph.onNodeRemoved = function(node) {
+    setTimeout(saveGraphToCache, 100);
+};
+
+graph.onConnectionChange = function() {
+    setTimeout(saveGraphToCache, 100);
+};
+
+// Save on node property changes
+const originalOnPropertyChanged = LGraphNode.prototype.onPropertyChanged;
+LGraphNode.prototype.onPropertyChanged = function(name, value) {
+    if (originalOnPropertyChanged) {
+        originalOnPropertyChanged.call(this, name, value);
+    }
+    setTimeout(saveGraphToCache, 100);
+};
+
+// Update cache info display
+function updateCacheInfo() {
+    const cacheInfo = document.getElementById('cache-info');
+    if (!cacheInfo) return;
+    
+    try {
+        const cached = localStorage.getItem('audioRouterGraph');
+        const cachedInputDevice = localStorage.getItem('audioRouterInputDevice');
+        
+        let infoText = '';
+        
+        if (cached) {
+            const data = JSON.parse(cached);
+            const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'unknown';
+            infoText += `Graph: ${data.nodes.length} nodes, ${data.links.length} links\n${timestamp}`;
+        } else {
+            infoText += 'No cached graph';
+        }
+        
+        if (cachedInputDevice) {
+            const deviceId = parseInt(cachedInputDevice);
+            const device = devices.input?.find(d => d.id === deviceId);
+            const deviceName = device ? device.name : `ID ${deviceId}`;
+            infoText += `\nInput: ${deviceName}`;
+        }
+        
+        cacheInfo.textContent = infoText;
+    } catch (error) {
+        cacheInfo.textContent = 'Cache error';
+    }
+}
+
 // Initialize
-loadDevices();
+loadDevices().then(() => {
+    // Load cached graph after devices are loaded
+    loadGraphFromCache();
+    updateCacheInfo();
+});
 
 // Resize canvas properly
 function resizeCanvas() {
@@ -698,6 +984,61 @@ function resizeCanvas() {
 
 window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 100);
+
+// Show save indicator
+function showSaveIndicator() {
+    // Create or update save indicator
+    let indicator = document.getElementById('save-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'save-indicator';
+        indicator.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        `;
+        document.body.appendChild(indicator);
+    }
+    
+    indicator.textContent = '💾 Graph Saved';
+    indicator.style.opacity = '1';
+    
+    setTimeout(() => {
+        indicator.style.opacity = '0';
+    }, 2000);
+}
+
+// Clear cache function
+function clearGraphCache() {
+    if (confirm('Clear all saved data? This will remove cached graph and input device selection.')) {
+        localStorage.removeItem('audioRouterGraph');
+        localStorage.removeItem('audioRouterInputDevice');
+        console.log('All cache cleared');
+        updateCacheInfo();
+        
+        // Reset input device selection
+        const select = document.getElementById('inputDevice');
+        if (select) {
+            select.value = '';
+        }
+        
+        // Optionally reload the page to start fresh
+        if (confirm('Reload page to start with empty graph?')) {
+            window.location.reload();
+        }
+    }
+}
+
+// Save before page unload
+window.addEventListener('beforeunload', saveGraphToCache);
 
 // Start graph rendering
 graph.start();

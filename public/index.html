@@ -26,6 +26,11 @@
             <h3>🎛️ Tools</h3>
             <button id="addMixerBtn" onclick="addMixerNode()" class="tool-btn">+ Add Mixer</button>
             
+            <h3>💾 Cache</h3>
+            <div id="cache-info" style="font-size: 11px; color: #888; margin-bottom: 8px;"></div>
+            <button onclick="saveGraphToCache()" class="tool-btn">💾 Save Graph</button>
+            <button onclick="clearGraphCache()" class="tool-btn">🗑️ Clear Cache</button>
+            
             <h3>📤 Output Devices</h3>
             <div id="device-list"></div>
         </div>

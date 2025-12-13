@@ -4,12 +4,14 @@
 FastAPI backend with LiteGraph.js frontend
 """
 
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 import asyncio
 
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
 from audio_router import AudioRouter
+
 
 app = FastAPI()
 
@@ -141,6 +143,15 @@ async def set_latency(data: dict):
     if router:
         router.set_latency(data['device_id'], data['latency_ms'])
     return {"status": "set"}
+
+
+@app.post("/api/buffers/clear")
+async def clear_buffers():
+    """Clear all latency buffers to stop residual audio"""
+    global router
+    if router:
+        router.clear_buffers()
+    return {"status": "cleared"}
 
 
 @app.get("/api/state")
