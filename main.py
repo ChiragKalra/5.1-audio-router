@@ -5,7 +5,7 @@ FastAPI backend with LiteGraph.js frontend
 """
 
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import asyncio
 
@@ -140,6 +140,15 @@ async def set_latency(data: dict):
     global router
     if router:
         router.set_latency(data['device_id'], data['latency_ms'])
+    return {"status": "set"}
+
+
+@app.post("/api/filter/set")
+async def set_filter(data: dict):
+    """Set frequency cutoff filter for an output device"""
+    global router
+    if router:
+        router.set_filter(data['device_id'], data['low_cutoff'], data['high_cutoff'])
     return {"status": "set"}
 
 

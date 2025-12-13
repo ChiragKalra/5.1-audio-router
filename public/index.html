@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>5.1 Audio Router</title>
     <script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css?v=2">
 </head>
+
 <body>
     <div id="header">
         <h1>🎵 5.1 Audio Router</h1>
@@ -25,12 +27,14 @@
         <div id="sidebar">
             <h3>🎛️ Tools</h3>
             <button id="addMixerBtn" onclick="addMixerNode()" class="tool-btn">+ Add Mixer</button>
-            
+            <button id="addFilterBtn" onclick="addFilterNode()" class="tool-btn">+ Add Freq Cutoff</button>
+
             <h3>📤 Output Devices</h3>
             <div id="device-list"></div>
         </div>
     </div>
-    
-    <script src="/main.js"></script>
+
+    <script src="/main.js?v=2"></script>
 </body>
+
 </html>
